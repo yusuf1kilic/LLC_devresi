@@ -1,0 +1,24 @@
+--cpu Cortex-M3
+"changepages\startup_stm32f103xb.o"
+"changepages\lcd1602.o"
+"changepages\main.o"
+"changepages\stm32f1xx_it.o"
+"changepages\stm32f1xx_hal_msp.o"
+"changepages\stm32f1xx_hal_gpio_ex.o"
+"changepages\stm32f1xx_hal_tim.o"
+"changepages\stm32f1xx_hal_tim_ex.o"
+"changepages\stm32f1xx_hal.o"
+"changepages\stm32f1xx_hal_rcc.o"
+"changepages\stm32f1xx_hal_rcc_ex.o"
+"changepages\stm32f1xx_hal_gpio.o"
+"changepages\stm32f1xx_hal_dma.o"
+"changepages\stm32f1xx_hal_cortex.o"
+"changepages\stm32f1xx_hal_pwr.o"
+"changepages\stm32f1xx_hal_flash.o"
+"changepages\stm32f1xx_hal_flash_ex.o"
+"changepages\stm32f1xx_hal_exti.o"
+"changepages\system_stm32f1xx.o"
+--strict --scatter "changePages\changePages.sct"
+--summary_stderr --info summarysizes --map --load_addr_map_info --xref --callgraph --symbols
+--info sizes --info totals --info unused --info veneers
+--list "changePages.map" -o changePages\changePages.axf
