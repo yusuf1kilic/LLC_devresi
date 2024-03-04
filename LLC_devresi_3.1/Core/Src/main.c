@@ -21,17 +21,23 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-#define TOTAL_PAGES 5 //sayfa sayisi
+#define TOTAL_PAGES 6 //sayfa sayisi
 #include "LCD1602.h"
 #include "stdio.h"
-
+void startButton(void);
 void menuControl(void);//menulerde gezinme, kp ve ki, degerlerini azaltma
 void pageProcess(int page);
 void pageName(int numberPage);
 
 char yazi[16]=" ";
+char vol[16]=" ";
+char fre[16]=" ";
+char cur[16]=" ";
 int changePage = 0;
-//int deneme=0,time=0;
+uint32_t data[2];
+uint32_t adcBuffer[2];
+int period,frekans;
+
 
 /* USER CODE END Includes */
 
@@ -51,6 +57,9 @@ int changePage = 0;
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+ADC_HandleTypeDef hadc1;
+DMA_HandleTypeDef hdma_adc1;
+
 TIM_HandleTypeDef htim1;
 TIM_HandleTypeDef htim2;
 
@@ -61,32 +70,79 @@ TIM_HandleTypeDef htim2;
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
+static void MX_DMA_Init(void);
 static void MX_TIM2_Init(void);
 static void MX_TIM1_Init(void);
+static void MX_ADC1_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc){
+	if(hadc->Instance==ADC1){
+		data[0]=adcBuffer[0];
+		data[1]=adcBuffer[1];
+		
+		
+	}
+
+}
+void controlADC(){
+	
+	while(1){
+		lcd_put_cur(0,0);
+		sprintf(vol,"Voltage= %d " ,(data[0]*100)/4096);
+		lcd_send_string(vol);
+		lcd_put_cur(1,0);
+		sprintf(cur,"Current= %d " ,(data[1]*5)/4096);
+		lcd_send_string(cur);
+		if(data[0]>2400){
+			lcd_put_cur(0,0);
+			lcd_send_string("Hedef Aralikta  ");
+			lcd_put_cur(1,0);
+			lcd_send_string("Menu gecis");
+			HAL_Delay(2500);
+			break;
+			
+		}
+		
+		
+	}
+	
+}
+
 void pageName(int numberPage){
 	if(changePage==0){
 		lcd_clear();
 		lcd_put_cur(0,0);
-		lcd_send_string("PWM Baslatma");
+		lcd_send_string("Frekans okuma");
+		lcd_put_cur(1,0);
+		lcd_send_string("Akim okuma");
 	}else if(changePage==1){
 		lcd_clear();
 		lcd_put_cur(0,0);
-		lcd_send_string("ADC Okuma");
+		lcd_send_string("I Ayari");
 	}else if(changePage==2){
 		lcd_clear();
 		lcd_put_cur(0,0);
-		lcd_send_string("PI Ayarlari");
+		lcd_send_string("P Ayari");
 	
 	}else if(changePage==3){
 		lcd_clear();
 		lcd_put_cur(0,0);
+		lcd_send_string("Sistem Baslatma");
+	
+	}else if(changePage==4){
+		lcd_clear();
+		lcd_put_cur(0,0);
 		lcd_send_string("Sistem Durdurma");
+	
+	}else if(changePage==5){
+		lcd_clear();
+		lcd_put_cur(0,0);
+		lcd_send_string("Adc Okuma");
 	
 	}
 	
@@ -98,36 +154,146 @@ void pageProcess(int page){
 	
 		case 0:
 				lcd_clear();
-				lcd_put_cur(0,0);
-				lcd_send_string("isleme hazir 1");
+				
+				while(1){
+					lcd_put_cur(0,0);
+					frekans=72000000/TIM1->ARR;
+					sprintf(fre,"Frekans= %d",frekans);
+					lcd_send_string(fre);
+					lcd_put_cur(1,0);
+					sprintf(cur,"Akim= %d " ,(data[1]*5)/4096);
+					lcd_send_string(cur);
+					if(HAL_GPIO_ReadPin(GPIOB,GPIO_PIN_6)==1){
+							lcd_clear();
+							lcd_put_cur(0,0);
+							lcd_send_string("Cikis yapildi");
+							menuControl();
+					
+					}
+					
+				
+				}
 			break;
 		case 1:
 				lcd_clear();
 				lcd_put_cur(0,0);
-				lcd_send_string("isleme hazir 2");
+				lcd_send_string("KI islemi");
 			break;
 		case 2:
 				lcd_clear();
 				lcd_put_cur(0,0);
-				lcd_send_string("isleme hazir 3");
+				lcd_send_string("KP islemi");
+				
 			break;
 		case 3:
 				lcd_clear();
 				lcd_put_cur(0,0);
-				lcd_send_string("isleme hazir 4");
-			break;
-		case 4:
+				lcd_send_string("Baslatiliyor");
+				HAL_Delay(2000);
+				lcd_put_cur(0,0);
+				lcd_send_string("Giris Voltage");
+				HAL_GPIO_WritePin(GPIOA,GPIO_PIN_10,1);
+				HAL_Delay(5000);
 				lcd_clear();
 				lcd_put_cur(0,0);
-				lcd_send_string("isleme hazir 5");
+				lcd_send_string("Cikis gnd");
+				HAL_GPIO_WritePin(GPIOA,GPIO_PIN_11,1);
+				HAL_Delay(5000);
+				lcd_clear();
+				lcd_put_cur(0,0);
+				lcd_send_string("Cikis Voltage");
+				HAL_GPIO_WritePin(GPIOA,GPIO_PIN_12,1);
+				HAL_Delay(5000);
+				lcd_clear();
+				lcd_put_cur(0,0);
+				lcd_send_string("Frekans");
+				lcd_put_cur(1,0);
+				lcd_send_string("Baslatildi");
+				HAL_TIM_PWM_Start(&htim1,TIM_CHANNEL_1);
+				HAL_TIMEx_PWMN_Start(&htim1,TIM_CHANNEL_1);
+				HAL_Delay(2000);
+				lcd_clear();
+				
+				lcd_send_string("Menuye gecildi");
+				
+				menuControl();
 			break;
+		case 4:
+				
+				lcd_clear();
+				lcd_put_cur(0,0);
+				lcd_send_string("Durduruluyor");
+				HAL_Delay(2000);
+				lcd_clear();
+				lcd_send_string("Frekans");
+				lcd_put_cur(1,0);
+				lcd_send_string("Durduruluyor");
+				HAL_TIM_PWM_Stop(&htim1,TIM_CHANNEL_1);
+				HAL_TIMEx_PWMN_Stop(&htim1,TIM_CHANNEL_1);
+				HAL_Delay(5000);
+				lcd_clear();
+				lcd_put_cur(0,0);
+				lcd_send_string("Giris Voltage");
+				lcd_put_cur(1,0);
+				lcd_send_string("Cikis Voltage");
+				HAL_GPIO_WritePin(GPIOA,GPIO_PIN_12,0);
+				HAL_GPIO_WritePin(GPIOA,GPIO_PIN_10,0);
+				HAL_Delay(5000);
+				lcd_clear();
+				lcd_put_cur(0,0);
+				lcd_send_string("Cikis gnd");
+				HAL_GPIO_WritePin(GPIOA,GPIO_PIN_11,0);
+				HAL_Delay(2000);
+				lcd_clear();
+				lcd_put_cur(0,0);
+				lcd_send_string("Devre Kapatildi");
+				HAL_Delay(2000);
+				lcd_clear();
+				while(1){
+					lcd_put_cur(0,0);
+					sprintf(vol,"Voltage= %d " ,(data[0]*100)/4096);
+					lcd_send_string(vol);
+					lcd_put_cur(1,0);
+					sprintf(cur,"Current= %d " ,(data[1]*5)/4096);
+					lcd_send_string(cur);
+					if(HAL_GPIO_ReadPin(GPIOB,GPIO_PIN_6)==1){
+							lcd_clear();
+							lcd_put_cur(0,0);
+							lcd_send_string("Cikis yapildi");
+							menuControl();
+					
+					}
+				}
+				
+			break;
+		case 5:
+				lcd_clear();
+				while(1){
+					lcd_put_cur(0,0);
+					sprintf(vol,"Voltage= %d " ,(data[0]*100)/4096);
+					lcd_send_string(vol);
+					lcd_put_cur(1,0);
+					sprintf(cur,"Current= %d " ,(data[1]*5)/4096);
+					lcd_send_string(cur);
+					if(HAL_GPIO_ReadPin(GPIOB,GPIO_PIN_6)==1){
+							lcd_clear();
+							lcd_put_cur(0,0);
+							lcd_send_string("Cikis yapildi");
+							menuControl();
+					
+					}
+				}
+		break;
+			
 		default:
 			lcd_clear();	
 			lcd_put_cur(0,0);
-			lcd_send_string("sayfa hatasi");
+			lcd_send_string("Sayfa Hatasi");
 			
 			
 	}
+		
+			
 	
 		while(1){
 		
@@ -203,12 +369,16 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
+  MX_DMA_Init();
   MX_TIM2_Init();
   MX_TIM1_Init();
+  MX_ADC1_Init();
   /* USER CODE BEGIN 2 */
 	HAL_TIM_Base_Start(&htim2);
-	HAL_TIM_PWM_Start(&htim1,TIM_CHANNEL_1);
-	HAL_TIMEx_PWMN_Start(&htim1,TIM_CHANNEL_1);
+
+	period=TIM1->ARR;
+	frekans=72000000/TIM1->ARR;
+	HAL_ADC_Start_DMA(&hadc1,adcBuffer,2);
 	
 	
 	lcd_init();
@@ -217,6 +387,14 @@ int main(void)
 	HAL_Delay(1500);
 	lcd_clear();
 	
+	lcd_put_cur(0,0);
+	lcd_send_string("Sistem Kontrol");
+	lcd_put_cur(1,0);
+	lcd_send_string("Ediliyor");
+	HAL_Delay(5000);
+	lcd_clear();
+	
+	controlADC();
 	menuControl();
 
   /* USER CODE END 2 */
@@ -241,6 +419,7 @@ void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
   RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+  RCC_PeriphCLKInitTypeDef PeriphClkInit = {0};
 
   /** Initializes the RCC Oscillators according to the specified parameters
   * in the RCC_OscInitTypeDef structure.
@@ -270,6 +449,68 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_ADC;
+  PeriphClkInit.AdcClockSelection = RCC_ADCPCLK2_DIV6;
+  if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
+  {
+    Error_Handler();
+  }
+}
+
+/**
+  * @brief ADC1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_ADC1_Init(void)
+{
+
+  /* USER CODE BEGIN ADC1_Init 0 */
+
+  /* USER CODE END ADC1_Init 0 */
+
+  ADC_ChannelConfTypeDef sConfig = {0};
+
+  /* USER CODE BEGIN ADC1_Init 1 */
+
+  /* USER CODE END ADC1_Init 1 */
+
+  /** Common config
+  */
+  hadc1.Instance = ADC1;
+  hadc1.Init.ScanConvMode = ADC_SCAN_ENABLE;
+  hadc1.Init.ContinuousConvMode = ENABLE;
+  hadc1.Init.DiscontinuousConvMode = DISABLE;
+  hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
+  hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
+  hadc1.Init.NbrOfConversion = 2;
+  if (HAL_ADC_Init(&hadc1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Regular Channel
+  */
+  sConfig.Channel = ADC_CHANNEL_1;
+  sConfig.Rank = ADC_REGULAR_RANK_1;
+  sConfig.SamplingTime = ADC_SAMPLETIME_13CYCLES_5;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure Regular Channel
+  */
+  sConfig.Channel = ADC_CHANNEL_2;
+  sConfig.Rank = ADC_REGULAR_RANK_2;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN ADC1_Init 2 */
+
+  /* USER CODE END ADC1_Init 2 */
+
 }
 
 /**
@@ -383,6 +624,22 @@ static void MX_TIM2_Init(void)
 }
 
 /**
+  * Enable DMA controller clock
+  */
+static void MX_DMA_Init(void)
+{
+
+  /* DMA controller clock enable */
+  __HAL_RCC_DMA1_CLK_ENABLE();
+
+  /* DMA interrupt init */
+  /* DMA1_Channel1_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
+
+}
+
+/**
   * @brief GPIO Initialization Function
   * @param None
   * @retval None
@@ -400,15 +657,15 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_3|GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_6
-                          |GPIO_PIN_7, GPIO_PIN_RESET);
+                          |GPIO_PIN_7|GPIO_PIN_10|GPIO_PIN_11|GPIO_PIN_12, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0|GPIO_PIN_1, GPIO_PIN_RESET);
 
   /*Configure GPIO pins : PA3 PA4 PA5 PA6
-                           PA7 */
+                           PA7 PA10 PA11 PA12 */
   GPIO_InitStruct.Pin = GPIO_PIN_3|GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_6
-                          |GPIO_PIN_7;
+                          |GPIO_PIN_7|GPIO_PIN_10|GPIO_PIN_11|GPIO_PIN_12;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -425,6 +682,12 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pin = GPIO_PIN_3|GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_6;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : PB7 */
+  GPIO_InitStruct.Pin = GPIO_PIN_7;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
 /* USER CODE BEGIN MX_GPIO_Init_2 */
