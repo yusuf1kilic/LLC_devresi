@@ -29,14 +29,25 @@ void menuControl(void);//menulerde gezinme, kp ve ki, degerlerini azaltma
 void pageProcess(int page);
 void pageName(int numberPage);
 
+
 char yazi[16]=" ";
 char vol[16]=" ";
 char fre[16]=" ";
 char cur[16]=" ";
+char cKI[16]=" ";
+char cKP[16]=" ";
 int changePage = 0;
 uint32_t data[2];
 uint32_t adcBuffer[2];
 int period,frekans;
+float integral=0;	
+float pOutput,iOutput,output;
+float integralSinirlama;
+long oncekiZaman,simdikiZaman;
+double time;//gecen zaman
+float kp=1;
+float ki=0.1;
+double error;
 
 
 /* USER CODE END Includes */
@@ -80,15 +91,17 @@ static void MX_ADC1_Init(void);
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
 void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef* hadc){
 	if(hadc->Instance==ADC1){
 		data[0]=adcBuffer[0];
 		data[1]=adcBuffer[1];
 		
-		
 	}
 
 }
+
+
 void controlADC(){
 	
 	while(1){
@@ -111,6 +124,30 @@ void controlADC(){
 		
 	}
 	
+}
+
+
+void setPWMFrequency(float frequency){
+	__HAL_TIM_SET_AUTORELOAD(&htim1,(frekans/frequency)-1);
+
+
+}
+double PIControl(){
+	simdikiZaman=HAL_GetTick()/1000;
+	time=simdikiZaman-oncekiZaman;
+	float error = frekans;//-olculen frekans
+	integral+=error*time;
+	
+
+ 
+  pOutput = kp*error;
+  iOutput += error*time;
+  // Toplam çikis
+  output = pOutput + iOutput;
+	oncekiZaman=simdikiZaman;
+	return output;
+
+
 }
 
 void pageName(int numberPage){
@@ -148,6 +185,7 @@ void pageName(int numberPage){
 	
 }
 
+
 void pageProcess(int page){
 	switch(page){
 
@@ -175,14 +213,72 @@ void pageProcess(int page){
 				}
 			break;
 		case 1:
+			//KI ayari
 				lcd_clear();
 				lcd_put_cur(0,0);
-				lcd_send_string("KI islemi");
+				sprintf(cKI,"KI= %f " ,ki);
+				lcd_send_string(cKI);
+				
+				while(1){
+					if(HAL_GPIO_ReadPin(GPIOB,GPIO_PIN_3)==1){
+						ki+=0.1;
+						lcd_put_cur(0,0);
+						sprintf(cKI,"KI= %f " ,ki);
+						lcd_send_string(cKI);
+						
+					}else if(HAL_GPIO_ReadPin(GPIOB,GPIO_PIN_4)==1){
+						ki-=0.1;
+						lcd_put_cur(0,0);
+						sprintf(cKI,"KI= %f " ,ki);
+						lcd_send_string(cKI);
+					
+					}
+					if(HAL_GPIO_ReadPin(GPIOB,GPIO_PIN_6)==1){
+						
+						lcd_clear();
+						lcd_put_cur(0,0);
+						lcd_send_string("Cikis yapildi");
+						menuControl();
+					
+					}
+					
+					HAL_Delay(100);
+				
+				}
 			break;
 		case 2:
+			//KP ayari
 				lcd_clear();
 				lcd_put_cur(0,0);
-				lcd_send_string("KP islemi");
+				sprintf(cKP,"KP= %f " ,kp);
+				lcd_send_string(cKP);
+				
+				while(1){
+					if(HAL_GPIO_ReadPin(GPIOB,GPIO_PIN_3)==1){
+						kp+=0.1;
+						lcd_put_cur(0,0);
+						sprintf(cKP,"KP= %f " ,kp);
+						lcd_send_string(cKP);
+						
+					}else if(HAL_GPIO_ReadPin(GPIOB,GPIO_PIN_4)==1){
+						kp-=0.1;
+						lcd_put_cur(0,0);
+						sprintf(cKP,"KI= %f " ,kp);
+						lcd_send_string(cKP);
+					
+					}
+					if(HAL_GPIO_ReadPin(GPIOB,GPIO_PIN_6)==1){
+						
+						lcd_clear();
+						lcd_put_cur(0,0);
+						lcd_send_string("Cikis yapildi");
+						menuControl();
+					
+					}
+					
+					HAL_Delay(100);
+				
+				}
 				
 			break;
 		case 3:
@@ -406,6 +502,7 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+			
 
   }
   /* USER CODE END 3 */
@@ -663,9 +760,9 @@ static void MX_GPIO_Init(void)
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_0|GPIO_PIN_1, GPIO_PIN_RESET);
 
   /*Configure GPIO pins : PA3 PA4 PA5 PA6
-                           PA7 PA10 PA11 PA12 */
+                           PA7 */
   GPIO_InitStruct.Pin = GPIO_PIN_3|GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_6
-                          |GPIO_PIN_7|GPIO_PIN_10|GPIO_PIN_11|GPIO_PIN_12;
+                          |GPIO_PIN_7;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
@@ -677,6 +774,13 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+  /*Configure GPIO pins : PA10 PA11 PA12 */
+  GPIO_InitStruct.Pin = GPIO_PIN_10|GPIO_PIN_11|GPIO_PIN_12;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_PULLDOWN;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
 
   /*Configure GPIO pins : PB3 PB4 PB5 PB6 */
   GPIO_InitStruct.Pin = GPIO_PIN_3|GPIO_PIN_4|GPIO_PIN_5|GPIO_PIN_6;
